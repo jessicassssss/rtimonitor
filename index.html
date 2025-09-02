@@ -1,22 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>RTI Monitor Report</title>
+  <meta charset="UTF-8">
+  <title>RTI Monitor Dashboard</title>
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    table {
+      width: 100%;
+    }
+  </style>
 </head>
 <body>
-  <h1>RTI Monitor Latest Report</h1>
-  <p>最新報告 JSON：</p>
-  <a href="schedule-report.json">Download JSON</a>
-  <pre id="output"></pre>
+  <h1>📊 RTI Monitor Dashboard</h1>
+  <p style="text-align:center;">最新的節目監測報告（JSON 自動更新）</p>
+
+  <table id="report" class="display nowrap" cellspacing="0">
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Date</th>
+        <th>Language</th>
+        <th>Program Title</th>
+        <th>Episode Title</th>
+        <th>Audio OK</th>
+        <th>Bulletin OK</th>
+        <th>Status</th>
+        <th>Issues</th>
+      </tr>
+    </thead>
+  </table>
+
+  <!-- jQuery & DataTables -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 
   <script>
-    fetch("schedule-report.json")
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById("output").textContent =
-          JSON.stringify(data, null, 2);
+    $(document).ready(function() {
+      $('#report').DataTable({
+        ajax: "schedule-report.json",
+        columns: [
+          { data: "timestamp" },
+          { data: "date" },
+          { data: "lang" },
+          { data: "program_title" },
+          { data: "episode_title" },
+          { data: "audio_ok" },
+          { data: "bulletin_ok" },
+          { data: "status" },
+          { data: "issues" }
+        ],
+        responsive: true,
+        dom: 'Bfrtip',
+        buttons: [
+          'copyHtml5',
+          'csvHtml5',
+          'excelHtml5',
+          'print'
+        ]
       });
+    });
   </script>
 </body>
 </html>
