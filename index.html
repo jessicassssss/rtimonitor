@@ -1,60 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>RTI Schedule Monitor</title>
-  <link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <title>RTI Schedule Monitor Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { margin-bottom: 20px; }
     table { width: 100%; }
-    .ok { color: #0a7d0a; font-weight: 600; }
-    .issue { color: #b00020; font-weight: 600; }
+    .ok { background: #e6ffe6; }
+    .issue { background: #ffe6e6; }
+    .no-data { background: #f0f0f0; }
   </style>
 </head>
 <body>
-  <h1>RTI Schedule Monitor</h1>
-  <div id="err" style="display:none" class="issue"></div>
-  <table id="report" class="display"></table>
+  <h1>📊 RTI Schedule Monitor Dashboard</h1>
+  <table id="report" class="display">
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Date</th>
+        <th>Lang</th>
+        <th>Program Title</th>
+        <th>Episode Title</th>
+        <th>Audio OK</th>
+        <th>Bulletin OK</th>
+        <th>Status</th>
+        <th>Issues</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
   <script>
-    (async function () {
-      const bust = Date.now(); // 避免快取
-      try {
-        const resp = await fetch(`latest.json?_=${bust}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();     // 根就是陣列
-
-        // 動態推欄位，或用固定欄位
-        const columns = [
-          { data: 'timestamp', title: 'Timestamp' },
-          { data: 'date', title: 'Date' },
-          { data: 'lang', title: 'Language' },
-          { data: 'program_title', title: 'Program' },
-          { data: 'episode_title', title: 'Episode' },
-          { data: 'audio_ok', title: 'Audio OK',
-            render: v => v ? '<span class="ok">TRUE</span>' : '<span class="issue">FALSE</span>' },
-          { data: 'bulletin_ok', title: 'Bulletin OK',
-            render: v => v ? '<span class="ok">TRUE</span>' : '<span class="issue">FALSE</span>' },
-          { data: 'status', title: 'Status',
-            render: v => v === 'OK' ? '<span class="ok">OK</span>' : `<span class="issue">${v||''}</span>` },
-          { data: 'issues', title: 'Issues' }
-        ];
-
-        $('#report').DataTable({
-          data,
-          columns,
-          order: [[1, 'desc']],
-          pageLength: 25
-        });
-      } catch (e) {
-        console.error(e);
-        const box = document.getElementById('err');
-        box.style.display = 'block';
-        box.textContent = `⚠️ 無法載入 latest.json：${e.message}`;
-      }
-    })();
+    $(document).ready(function() {
+      $('#report').DataTable({
+        ajax: 'latest.json',
+        columns: [
+          { data: 'timestamp' },
+          { data: 'date' },
+          { data: 'lang' },
+          { data: 'program_title' },
+          { data: 'episode_title' },
+          { data: 'audio_ok' },
+          { data: 'bulletin_ok' },
+          { data: 'status' },
+          { data: 'issues' }
+        ],
+        createdRow: function(row, data) {
+          if (data.status === 'OK') {
+            $(row).addClass('ok');
+          } else if (data.status === 'ISSUE') {
+            $(row).addClass('issue');
+          } else {
+            $(row).addClass('no-data');
+          }
+        },
+        pageLength: 25
+      });
+    });
   </script>
 </body>
 </html>
