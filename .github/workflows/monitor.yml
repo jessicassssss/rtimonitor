@@ -12,9 +12,14 @@ on:
       - "index.html"
       - ".github/workflows/monitor.yml"
 
+# 關鍵：讓 GITHUB_TOKEN 可寫入 repo（推 gh-pages 要用）
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -27,21 +32,35 @@ jobs:
       - name: Run monitor
         run: |
           mkdir -p out
-          python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d)
-          ls -lh out || true
+          python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d) || true
+          echo "== out/ listing =="
+          ls -lah out || true
 
       - name: Prepare website folder
         run: |
           mkdir -p public
-          cp -v out/*.json public/latest.json || echo "no json found"
-          if ls out/*.csv 1> /dev/null 2>&1; then cp -v out/*.csv public/latest.csv; fi
+          # 固定命名給前端讀
+          if ls out/*.json 1>/dev/null 2>&1; then
+            cp -v out/*.json public/latest.json
+          else
+            echo '[]' > public/latest.json
+          fi
+          # 可選：提供 CSV 下載
+          if ls out/*.csv 1>/dev/null 2>&1; then
+            cp -v out/*.csv public/latest.csv
+          fi
+          # 發佈前端頁面
           cp -v index.html public/index.html
+          # 避免 Jekyll 處理
           touch public/.nojekyll
-          ls -lh public
+          echo "== public/ listing =="
+          ls -lah public
 
       - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
           publish_branch: gh-pages
+          publish_dir: ./public
+          # 首次發佈/簡化歷史可用孤兒分支方式，避免 128
+          force_orphan: true
