@@ -2,8 +2,19 @@ name: RTI Monitor
 
 on:
   schedule:
-    - cron: "0 23 * * *"  # 每天 UTC 23:00
-  workflow_dispatch:      # 手動觸發也可以
+    - cron: "0 23 * * *"     # 每天 UTC 23:00（台灣 07:00）
+  workflow_dispatch:          # 可手動觸發
+  push:
+    branches: [ main ]
+    paths:
+      - "monitor_stdlib.py"
+      - "config-stdlib.json"
+      - "index.html"
+      - ".github/workflows/monitor.yml"
+
+# 重要：讓 GITHUB_TOKEN 有寫入權限（推 gh-pages 必要）
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,41 +22,46 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       - name: Run monitor
         run: |
-          python monitor_stdlib.py config-stdlib.json --date $(date -u +"%Y-%m-%d")
-      
-      - name: Deploy to gh-pages
+          mkdir -p out
+          python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d) || true
+          echo "== out listing =="
+          ls -lah out || true
+
+      - name: Prepare website folder
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 建一個乾淨的資料夾
-          rm -rf public
           mkdir -p public
+          # 確保 latest.json 一定存在（即使今天沒抓到資料）
+          if ls out/*.json 1>/dev/null 2>&1; then
+            cp -v $(ls -t out/*.json | head -n1) public/latest.json
+          else
+            echo "[]" > public/latest.json
+          fi
+          # 可選：提供最新 CSV 下載
+          if ls out/*.csv 1>/dev/null 2>&1; then
+            cp -v $(ls -t out/*.csv | head -n1) public/latest.csv
+          fi
+          # 發佈頁面
+          cp -v index.html public/index.html
+          # 停用 Jekyll
+          touch public/.nojekyll
+          echo "== public listing =="
+          ls -lah public
 
-          # 複製輸出的最新 JSON/CSV
-          cp out/*.json public/
-          cp out/*.csv public/
-
-          # 把最後一份 JSON 複製成 latest.json
-          cp $(ls -t out/*.json | head -n 1) public/latest.json
-
-          # 複製 index.html
-          cp index.html public/
-
-          cd public
-          git init
-          git checkout -b gh-pages
-          git add .
-          git commit -m "Deploy latest report"
-          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" gh-pages
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          force_orphan: true   # 首次/重置歷史都安全
