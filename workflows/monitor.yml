@@ -2,36 +2,32 @@ name: RTI Monitor
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 每天 UTC 23:00 執行一次
-  workflow_dispatch:        # 允許手動觸發
+    - cron: "0 23 * * *"  # 每天 UTC 23:00
+  workflow_dispatch:       # 手動觸發也可
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.x'
 
-      - name: Run monitor script
+      - name: Run monitor
         run: |
-          mkdir -p out
           python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d)
-          ls -lh out
 
-      - name: Move reports to docs
+      - name: Copy output to web
         run: |
-          mkdir -p docs
-          cp out/*.json docs/report.json
+          mkdir -p public
+          cp out/*.json public/latest.json
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
+          publish_dir: ./public
