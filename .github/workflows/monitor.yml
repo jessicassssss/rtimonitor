@@ -1,0 +1,47 @@
+name: RTI Monitor
+
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 每天 UTC 23:00（台北 07:00）
+  workflow_dispatch:        # 允許手動觸發
+  push:
+    branches: [ main ]
+    paths:
+      - "monitor_stdlib.py"
+      - "config-stdlib.json"
+      - "index.html"
+      - ".github/workflows/monitor.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run monitor
+        run: |
+          mkdir -p out
+          python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d)
+          ls -lh out || true
+
+      - name: Prepare website folder
+        run: |
+          mkdir -p public
+          cp -v out/*.json public/latest.json || echo "no json found"
+          if ls out/*.csv 1> /dev/null 2>&1; then cp -v out/*.csv public/latest.csv; fi
+          cp -v index.html public/index.html
+          touch public/.nojekyll
+          ls -lh public
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
