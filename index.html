@@ -2,76 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>RTI Schedule Monitor Dashboard</title>
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- DataTables CSS -->
-  <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+  <title>RTI Schedule Monitor</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; }
+  </style>
 </head>
-<body class="bg-light">
+<body>
+  <h1>RTI Schedule Monitor</h1>
+  <table id="report" class="display"></table>
 
-<div class="container py-4">
-  <h1 class="mb-4 text-center">RTI Schedule Monitor Dashboard</h1>
-  
-  <div class="table-responsive">
-    <table id="report" class="table table-striped table-bordered" style="width:100%">
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Date</th>
-          <th>Language</th>
-          <th>Program</th>
-          <th>Episode</th>
-          <th>Audio OK</th>
-          <th>Bulletin OK</th>
-          <th>Status</th>
-          <th>Issues</th>
-        </tr>
-      </thead>
-    </table>
-  </div>
-</div>
-
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<!-- DataTables JS -->
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-
-<script>
-$(document).ready(function() {
-  fetch('schedule-report.json')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("Network response was not ok " + response.statusText);
-      }
-      return response.json();
-    })
-    .then(data => {
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script>
+    $(document).ready(function() {
       $('#report').DataTable({
-        data: data,
+        ajax: 'latest.json',
         columns: [
-          { data: 'timestamp' },
-          { data: 'date' },
-          { data: 'lang' },
-          { data: 'program_title' },
-          { data: 'episode_title' },
-          { data: 'audio_ok' },
-          { data: 'bulletin_ok' },
-          { data: 'status' },
-          { data: 'issues' }
+          { data: 'timestamp', title: 'Timestamp' },
+          { data: 'date', title: 'Date' },
+          { data: 'lang', title: 'Language' },
+          { data: 'program_title', title: 'Program Title' },
+          { data: 'program_url', title: 'Program URL',
+            render: function(data){ return `<a href="${data}" target="_blank">${data}</a>`; }},
+          { data: 'episode_title', title: 'Episode Title' },
+          { data: 'episode_url', title: 'Episode URL',
+            render: function(data){ return `<a href="${data}" target="_blank">${data}</a>`; }},
+          { data: 'audio_ok', title: 'Audio OK' },
+          { data: 'audio_urls', title: 'Audio URLs',
+            render: function(data){ return data.split(';').map(u=>`<a href="${u}" target="_blank">link</a>`).join(', '); }},
+          { data: 'audio_sizes_kb', title: 'Audio Sizes (KB)' },
+          { data: 'bulletin_len', title: 'Bulletin Length' },
+          { data: 'bulletin_ok', title: 'Bulletin OK' },
+          { data: 'status', title: 'Status' },
+          { data: 'issues', title: 'Issues' }
         ],
-        order: [[1, 'desc']],   // 預設依日期倒序
-        pageLength: 25,
+        pageLength: 25
       });
-    })
-    .catch(error => {
-      console.error('Error loading JSON:', error);
-      document.body.innerHTML += `<div class="alert alert-danger">⚠️ 無法載入 schedule-report.json (${error.message})</div>`;
     });
-});
-</script>
+  </script>
 </body>
 </html>
