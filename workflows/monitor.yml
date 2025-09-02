@@ -3,31 +3,42 @@ name: RTI Monitor
 on:
   schedule:
     - cron: "0 23 * * *"  # 每天 UTC 23:00
-  workflow_dispatch:       # 手動觸發也可
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Run monitor
         run: |
+          mkdir -p out
           python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d)
+          ls -lh out
 
-      - name: Copy output to web
+      - name: Prepare website folder
         run: |
           mkdir -p public
+          # 1) 固定檔名，前端就抓 latest.json
           cp out/*.json public/latest.json
+          # 2) 把 index.html 一起發佈
+          cp index.html public/index.html
+          # 3)（可選）把最近一次 CSV 也放上去方便下載
+          if ls out/*.csv 1> /dev/null 2>&1; then cp out/*.csv public/schedule-report.csv; fi
+          # 4) 禁用 Jekyll，避免檔名被忽略
+          touch public/.nojekyll
+          ls -lh public
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+          publish_branch: gh-pages
