@@ -32,35 +32,46 @@
     <tbody></tbody>
   </table>
 
-  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-  <script>
-    $(document).ready(function() {
-      $('#report').DataTable({
-        ajax: 'latest.json',
-        columns: [
-          { data: 'timestamp' },
-          { data: 'date' },
-          { data: 'lang' },
-          { data: 'program_title' },
-          { data: 'episode_title' },
-          { data: 'audio_ok' },
-          { data: 'bulletin_ok' },
-          { data: 'status' },
-          { data: 'issues' }
-        ],
-        createdRow: function(row, data) {
-          if (data.status === 'OK') {
-            $(row).addClass('ok');
-          } else if (data.status === 'ISSUE') {
-            $(row).addClass('issue');
-          } else {
-            $(row).addClass('no-data');
-          }
-        },
-        pageLength: 25
-      });
+ <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+(async function () {
+  try {
+    // 避免快取：每次帶時間戳
+    const resp = await fetch('latest.json?ts=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const rows = await resp.json(); // latest.json 的根是陣列
+
+    $('#report').DataTable({
+      data: rows,
+      columns: [
+        { data: 'timestamp', title: 'timestamp' },
+        { data: 'date', title: 'date' },
+        { data: 'lang', title: 'lang' },
+        { data: 'program_title', title: 'program_title' },
+        { data: 'program_url', title: 'program_url',
+          render: d => d ? `<a href="${d}" target="_blank">link</a>` : '' },
+        { data: 'episode_title', title: 'episode_title' },
+        { data: 'episode_url', title: 'episode_url',
+          render: d => d ? `<a href="${d}" target="_blank">audio</a>` : '' },
+        { data: 'audio_ok', title: 'audio_ok' },
+        { data: 'audio_urls', title: 'audio_urls' },
+        { data: 'audio_sizes_kb', title: 'audio_sizes_kb' },
+        { data: 'bulletin_len', title: 'bulletin_len' },
+        { data: 'bulletin_ok', title: 'bulletin_ok' },
+        { data: 'status', title: 'status' },
+        { data: 'issues', title: 'issues' }
+      ],
+      order: [[1, 'desc']],
+      pageLength: 25,
+      responsive: true
     });
-  </script>
+  } catch (e) {
+    console.error('Load latest.json failed:', e);
+    alert('⚠️ 無法載入 latest.json：' + e.message);
+  }
+})();
+</script>
+
 </body>
 </html>
