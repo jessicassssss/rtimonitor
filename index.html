@@ -1,77 +1,51 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>RTI Schedule Monitor Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { margin-bottom: 20px; }
-    table { width: 100%; }
-    .ok { background: #e6ffe6; }
-    .issue { background: #ffe6e6; }
-    .no-data { background: #f0f0f0; }
-  </style>
-</head>
-<body>
-  <h1>📊 RTI Schedule Monitor Dashboard</h1>
-  <table id="report" class="display">
-    <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>Date</th>
-        <th>Lang</th>
-        <th>Program Title</th>
-        <th>Episode Title</th>
-        <th>Audio OK</th>
-        <th>Bulletin OK</th>
-        <th>Status</th>
-        <th>Issues</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+name: RTI Monitor
 
- <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script>
-(async function () {
-  try {
-    // 避免快取：每次帶時間戳
-    const resp = await fetch('latest.json?ts=' + Date.now());
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const rows = await resp.json(); // latest.json 的根是陣列
+on:
+  schedule:
+    - cron: "0 23 * * *"  # 每天 UTC 23:00
+  workflow_dispatch:      # 手動觸發也可以
 
-    $('#report').DataTable({
-      data: rows,
-      columns: [
-        { data: 'timestamp', title: 'timestamp' },
-        { data: 'date', title: 'date' },
-        { data: 'lang', title: 'lang' },
-        { data: 'program_title', title: 'program_title' },
-        { data: 'program_url', title: 'program_url',
-          render: d => d ? `<a href="${d}" target="_blank">link</a>` : '' },
-        { data: 'episode_title', title: 'episode_title' },
-        { data: 'episode_url', title: 'episode_url',
-          render: d => d ? `<a href="${d}" target="_blank">audio</a>` : '' },
-        { data: 'audio_ok', title: 'audio_ok' },
-        { data: 'audio_urls', title: 'audio_urls' },
-        { data: 'audio_sizes_kb', title: 'audio_sizes_kb' },
-        { data: 'bulletin_len', title: 'bulletin_len' },
-        { data: 'bulletin_ok', title: 'bulletin_ok' },
-        { data: 'status', title: 'status' },
-        { data: 'issues', title: 'issues' }
-      ],
-      order: [[1, 'desc']],
-      pageLength: 25,
-      responsive: true
-    });
-  } catch (e) {
-    console.error('Load latest.json failed:', e);
-    alert('⚠️ 無法載入 latest.json：' + e.message);
-  }
-})();
-</script>
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-</body>
-</html>
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Run monitor
+        run: |
+          python monitor_stdlib.py config-stdlib.json --date $(date -u +"%Y-%m-%d")
+      
+      - name: Deploy to gh-pages
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 建一個乾淨的資料夾
+          rm -rf public
+          mkdir -p public
+
+          # 複製輸出的最新 JSON/CSV
+          cp out/*.json public/
+          cp out/*.csv public/
+
+          # 把最後一份 JSON 複製成 latest.json
+          cp $(ls -t out/*.json | head -n 1) public/latest.json
+
+          # 複製 index.html
+          cp index.html public/
+
+          cd public
+          git init
+          git checkout -b gh-pages
+          git add .
+          git commit -m "Deploy latest report"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" gh-pages
