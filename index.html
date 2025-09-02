@@ -2,33 +2,58 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>RTI Monitor (Safe Mode)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RTI Schedule Monitor Dashboard</title>
+
+  <!-- DataTables + Buttons CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.3/css/buttons.dataTables.min.css">
+
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial, sans-serif; margin: 16px; }
+    :root {
+      --ok: #0a7d0a;
+      --issue: #b00020;
+      --nodata: #6b7280;
+    }
+    body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",Arial,sans-serif; margin: 16px; }
     h1 { font-size: 20px; margin: 0 0 12px; }
-    #error { color: #b00020; margin: 12px 0; display:none; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 14px; }
-    tr:nth-child(even) { background: #fafafa; }
-    .ok { background: #f2fff2; }
-    .issue { background: #fff1f3; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin: 8px 0 16px; }
+    .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; color:#fff; display:inline-block; }
+    .b-ok { background: var(--ok); }
+    .b-issue { background: var(--issue); }
+    .b-nodata { background: var(--nodata); }
+    .pill { padding:2px 8px; border-radius:999px; font-size:12px; color:#fff; }
+    .pill-true { background:#2563eb; }
+    .pill-false { background:#9ca3af; }
+    .err { color: var(--issue); margin-top: 12px; display:none; }
+    table.dataTable tbody tr.ok-row { background: #f2fff2; }
+    table.dataTable tbody tr.issue-row { background: #fff1f3; }
+    table.dataTable tbody tr.no-data-row { background: #f5f5f5; }
+    @media (max-width: 768px){ .buttons-colvis { display:none; } }
   </style>
 </head>
 <body>
-  <h1>RTI Monitor（安全模式）</h1>
-  <button id="reload">重新載入</button>
-  <div id="meta"></div>
-  <div id="error"></div>
-  <table id="tbl">
+  <h1>RTI Schedule Monitor Dashboard</h1>
+
+  <div class="toolbar">
+    <button id="reload" type="button">重新載入</button>
+    <span id="summary" aria-live="polite"></span>
+  </div>
+
+  <table id="report" class="display nowrap" style="width:100%">
     <thead>
       <tr>
         <th>timestamp</th>
         <th>date</th>
         <th>lang</th>
         <th>program_title</th>
+        <th>program_url</th>
         <th>episode_title</th>
+        <th>episode_url</th>
         <th>audio_ok</th>
+        <th>audio_urls</th>
+        <th>audio_sizes_kb</th>
+        <th>bulletin_len</th>
         <th>bulletin_ok</th>
         <th>status</th>
         <th>issues</th>
@@ -37,53 +62,124 @@
     <tbody></tbody>
   </table>
 
-  <script>
-    const LATEST = 'latest.json';
+  <div id="errorBox" class="err"></div>
 
-    async function load() {
-      const error = document.getElementById('error');
-      error.style.display = 'none';
-      error.textContent = '';
+  <!-- jQuery + DataTables + Buttons JS（順序很重要） -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.3/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.3/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.3/js/buttons.print.min.js"></script>
+
+  <script>
+    const latestUrl = 'latest.json';
+
+    function fmtLink(url, text) {
+      if (!url) return '';
+      const safe = String(url).replace(/"/g, '&quot;');
+      return `<a href="${safe}" target="_blank" rel="noopener">${text || 'link'}</a>`;
+    }
+    function badgeBool(v){
+      if (v === true || String(v).toLowerCase() === 'true') return '<span class="pill pill-true">TRUE</span>';
+      return '<span class="pill pill-false">FALSE</span>';
+    }
+    function badgeStatus(s){
+      const up = String(s||'').toUpperCase();
+      if (up === 'OK') return '<span class="badge b-ok">OK</span>';
+      if (up === 'ISSUE') return '<span class="badge b-issue">ISSUE</span>';
+      if (up === 'NO-DATA') return '<span class="badge b-nodata">NO-DATA</span>';
+      return `<span class="badge b-nodata">${s||''}</span>`;
+    }
+    function rowClassByStatus(s){
+      const up = String(s||'').toUpperCase();
+      if (up === 'OK') return 'ok-row';
+      if (up === 'ISSUE') return 'issue-row';
+      return 'no-data-row';
+    }
+    function summarize(rows){
+      const total = rows.length;
+      const ok = rows.filter(r => String(r.status).toUpperCase() === 'OK').length;
+      const issue = rows.filter(r => String(r.status).toUpperCase() === 'ISSUE').length;
+      const nodata = total - ok - issue;
+      document.getElementById('summary').innerHTML =
+        `總筆數 <b>${total}</b> ・ <span class="badge b-ok">OK ${ok}</span> ・ <span class="badge b-issue">ISSUE ${issue}</span> ・ <span class="badge b-nodata">NO-DATA ${nodata}</span>`;
+    }
+
+    let table = null;
+
+    function initTable(rows){
+      const cols = [
+        { data: 'timestamp', title: 'timestamp' },
+        { data: 'date', title: 'date' },
+        { data: 'lang', title: 'lang' },
+        { data: 'program_title', title: 'program_title' },
+        { data: 'program_url', title: 'program_url', render: d => fmtLink(d, 'schedule') },
+        { data: 'episode_title', title: 'episode_title' },
+        { data: 'episode_url', title: 'episode_url', render: d => fmtLink(d, 'audio') },
+        { data: 'audio_ok', title: 'audio_ok', render: v => badgeBool(v) },
+        { data: 'audio_urls', title: 'audio_urls',
+          render: d => d ? String(d).split(';').filter(Boolean).map(u => fmtLink(u, 'link')).join(', ') : '' },
+        { data: 'audio_sizes_kb', title: 'audio_sizes_kb' },
+        { data: 'bulletin_len', title: 'bulletin_len' },
+        { data: 'bulletin_ok', title: 'bulletin_ok', render: v => badgeBool(v) },
+        { data: 'status', title: 'status', render: s => badgeStatus(s) },
+        { data: 'issues', title: 'issues' }
+      ];
+
+      if (table) {
+        table.clear();
+        table.rows.add(rows);
+        table.draw(false);
+        return;
+      }
+
+      table = $('#report').DataTable({
+        data: rows,
+        columns: cols,
+        order: [[1, 'desc']],
+        pageLength: 25,
+        responsive: true,
+        deferRender: true,
+        dom: 'Bfrtip',
+        buttons: [
+          { extend: 'csvHtml5', title: 'schedule-report' },
+          { extend: 'excelHtml5', title: 'schedule-report' },
+          { extend: 'print', title: 'RTI Schedule Monitor' },
+          { extend: 'colvis', text: '欄位顯示' }
+        ],
+        createdRow: function(row, data){ row.classList.add(rowClassByStatus(data.status)); }
+      });
+    }
+
+    async function loadViaFetchFallback() {
+      // 後備方案：用 fetch 先抓，避免 DataTables ajax 報錯中斷
+      const ts = Date.now();
+      const resp = await fetch(`${latestUrl}?_=${ts}`, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const rows = await resp.json();
+      if (!Array.isArray(rows)) throw new Error('latest.json 格式錯誤（非陣列）');
+      return rows;
+    }
+
+    async function loadData() {
+      const errBox = document.getElementById('errorBox');
+      errBox.style.display = 'none';
+      errBox.textContent = '';
 
       try {
-        const resp = await fetch(`${LATEST}?ts=${Date.now()}`, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const rows = await resp.json();
-        if (!Array.isArray(rows)) throw new Error('latest.json 格式錯誤（非陣列）');
-
-        const meta = document.getElementById('meta');
-        meta.innerHTML = `筆數：<b>${rows.length}</b>`;
-
-        const tbody = document.querySelector('#tbl tbody');
-        tbody.innerHTML = '';
-        for (const r of rows) {
-          const tr = document.createElement('tr');
-          const s = String(r.status || '').toUpperCase();
-          if (s === 'OK') tr.classList.add('ok');
-          else if (s === 'ISSUE') tr.classList.add('issue');
-
-          tr.innerHTML = `
-            <td>${r.timestamp ?? ''}</td>
-            <td>${r.date ?? ''}</td>
-            <td>${r.lang ?? ''}</td>
-            <td>${r.program_title ?? ''}</td>
-            <td>${r.episode_title ?? ''}</td>
-            <td>${r.audio_ok}</td>
-            <td>${r.bulletin_ok}</td>
-            <td>${r.status ?? ''}</td>
-            <td>${r.issues ?? ''}</td>
-          `;
-          tbody.appendChild(tr);
-        }
+        const rows = await loadViaFetchFallback(); // 直接用 fetch，最穩
+        summarize(rows);
+        initTable(rows);
       } catch (e) {
         console.error(e);
-        error.style.display = 'block';
-        error.textContent = '⚠️ 無法載入 latest.json：' + (e && e.message ? e.message : e);
+        errBox.style.display = 'block';
+        errBox.textContent = '⚠️ 無法載入 latest.json：' + (e && e.message ? e.message : e);
+        initTable([]); // 仍然初始化空表，避免頁面元素為 undefined
       }
     }
 
-    document.getElementById('reload').addEventListener('click', load);
-    load();
+    document.getElementById('reload').addEventListener('click', loadData);
+    loadData();
   </script>
 </body>
 </html>
