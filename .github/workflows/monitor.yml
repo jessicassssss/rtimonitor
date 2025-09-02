@@ -2,19 +2,8 @@ name: RTI Monitor
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 每天 UTC 23:00（台北 07:00）
-  workflow_dispatch:        # 允許手動觸發
-  push:
-    branches: [ main ]
-    paths:
-      - "monitor_stdlib.py"
-      - "config-stdlib.json"
-      - "index.html"
-      - ".github/workflows/monitor.yml"
-
-# 關鍵：讓 GITHUB_TOKEN 可寫入 repo（推 gh-pages 要用）
-permissions:
-  contents: write
+    - cron: "0 23 * * *"  # 每天 UTC 23:00
+  workflow_dispatch:      # 手動觸發也可以
 
 jobs:
   build:
@@ -22,45 +11,41 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.x"
 
       - name: Run monitor
         run: |
-          mkdir -p out
-          python monitor_stdlib.py config-stdlib.json --date $(date -u +%Y-%m-%d) || true
-          echo "== out/ listing =="
-          ls -lah out || true
-
-      - name: Prepare website folder
-        run: |
-          mkdir -p public
-          # 固定命名給前端讀
-          if ls out/*.json 1>/dev/null 2>&1; then
-            cp -v out/*.json public/latest.json
-          else
-            echo '[]' > public/latest.json
-          fi
-          # 可選：提供 CSV 下載
-          if ls out/*.csv 1>/dev/null 2>&1; then
-            cp -v out/*.csv public/latest.csv
-          fi
-          # 發佈前端頁面
-          cp -v index.html public/index.html
-          # 避免 Jekyll 處理
-          touch public/.nojekyll
-          echo "== public/ listing =="
-          ls -lah public
-
+          python monitor_stdlib.py config-stdlib.json --date $(date -u +"%Y-%m-%d")
+      
       - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./public
-          # 首次發佈/簡化歷史可用孤兒分支方式，避免 128
-          force_orphan: true
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 建一個乾淨的資料夾
+          rm -rf public
+          mkdir -p public
+
+          # 複製輸出的最新 JSON/CSV
+          cp out/*.json public/
+          cp out/*.csv public/
+
+          # 把最後一份 JSON 複製成 latest.json
+          cp $(ls -t out/*.json | head -n 1) public/latest.json
+
+          # 複製 index.html
+          cp index.html public/
+
+          cd public
+          git init
+          git checkout -b gh-pages
+          git add .
+          git commit -m "Deploy latest report"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" gh-pages
